@@ -422,4 +422,103 @@ if st.session_state.current_page == "3.4 Hàm Suy Biến":
         st.markdown("**3. Phổ Hàm suy biến $\hat{H}_s$**")
         st.image(H_s_mag_vis, channels="GRAY", use_container_width=True)
 
-
+elif st.session_state.current_page == "3.5 Khử Nhiễu Wavelet":
+    import pywt
+    
+    # 1. BẢNG ĐIỀU KHIỂN
+    st.markdown("""
+        <div style="background-color: #e0e5ec; padding: 15px; border-radius: 15px; 
+                    box-shadow: 6px 6px 12px rgba(163,177,198,0.6), -6px -6px 12px rgba(255,255,255, 0.9); margin-bottom: 15px;">
+            <h3 style="margin-top: 0; margin-bottom: 0; color: #111111; font-weight: 900; font-size: 20px; text-align: center;">Bảng Điều Khiển Wavelet</h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    c_w, c_l, c_n, c_t = st.columns(4)
+    with c_w:
+        wavelet_name = st.selectbox("Chọn bộ lọc Wavelet:", ['haar', 'db2', 'db4', 'sym4', 'coif2'])
+    with c_l:
+        levels = st.slider("Số cấp phân rã DWT:", 1, 3, 2)
+    with c_n:
+        noise_level = st.slider("Mức độ nhiễu Gaussian:", 0.0, 100.0, 30.0, step=1.0)
+    with c_t:
+        threshold = st.slider("Ngưỡng khử nhiễu (Threshold):", 0.0, 150.0, 30.0, step=1.0)
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 2. KHU VỰC HIỂN THỊ ẢNH
+    st.markdown("""
+        <div style="background-color: #e0e5ec; padding: 15px; border-radius: 15px; 
+                    box-shadow: inset 4px 4px 8px rgba(163,177,198,0.7), inset -4px -4px 8px rgba(255,255,255, 0.9); margin-bottom: 15px;">
+            <h3 style="margin-top: 0; margin-bottom: 0; color: #111111; font-weight: 900; font-size: 20px; text-align: center;">Mô phỏng 3.5: Wavelet Denoising</h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Đọc ảnh
+    img_path = os.path.join(os.path.dirname(__file__), "anh-trang-den-1.webp")
+    if os.path.exists(img_path):
+        orig_img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        if orig_img.shape[0] > 500:
+            orig_img = cv2.resize(orig_img, (500, 500))
+            
+        img_float = orig_img.astype(np.float32)
+        
+        # Thêm nhiễu
+        np.random.seed(42) # Cố định seed để nhiễu không nhảy lung tung
+        noise = np.random.normal(0, noise_level, img_float.shape)
+        noisy_img = img_float + noise
+        noisy_display = np.clip(noisy_img, 0, 255).astype(np.uint8)
+        
+        # --- THỰC HIỆN DWT (Phân rã đa cấp để khử nhiễu) ---
+        # coeffs có dạng [cA_n, (cH_n, cV_n, cD_n), ..., (cH_1, cV_1, cD_1)]
+        coeffs = pywt.wavedec2(noisy_img, wavelet_name, level=levels)
+        
+        # --- KHỬ NHIỄU BẰNG SOFT THRESHOLDING ---
+        denoised_coeffs = list(coeffs)
+        for i in range(1, len(denoised_coeffs)):
+            # Cắt ngưỡng mềm trên các dải chi tiết (LH, HL, HH)
+            denoised_coeffs[i] = tuple(pywt.threshold(c, value=threshold, mode='soft') for c in denoised_coeffs[i])
+            
+        # Tái tạo ảnh (IDWT)
+        denoised_img = pywt.waverec2(denoised_coeffs, wavelet_name)
+        # Đảm bảo kích thước không bị lệch do padding của DWT
+        denoised_img = denoised_img[:img_float.shape[0], :img_float.shape[1]]
+        denoised_img = np.clip(denoised_img, 0, 255).astype(np.uint8)
+        
+        # --- HIỂN THỊ TRỰC QUAN PHÂN RÃ (CHỈ HIỂN THỊ CẤP 1 ĐỂ MINH HỌA) ---
+        coeffs_L1 = pywt.dwt2(noisy_img, wavelet_name)
+        cA, (cH, cV, cD) = coeffs_L1
+        
+        def normalize_band(band):
+            return np.clip(band, 0, 255).astype(np.uint8)
+            
+        def normalize_detail(band):
+            # Dùng cv2.NORM_MINMAX để sáng rõ đường nét
+            norm = cv2.normalize(np.abs(band), None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            return norm
+            
+        top_row = np.hstack((normalize_band(cA), normalize_detail(cH)))
+        bottom_row = np.hstack((normalize_detail(cV), normalize_detail(cD)))
+        dwt_vis = np.vstack((top_row, bottom_row))
+        
+        # Resize lại cho bằng với ảnh gốc để hiển thị ngang hàng
+        dwt_vis = cv2.resize(dwt_vis, (orig_img.shape[1], orig_img.shape[0]))
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("**1. Ảnh bị nhiễu $x(n)$**")
+            st.image(noisy_display, channels="GRAY", use_container_width=True)
+        with col2:
+            st.markdown("**2. Filterbank DWT (Cấp 1)**")
+            st.image(dwt_vis, channels="GRAY", use_container_width=True)
+            st.caption("Góc trái trên: LL. 3 góc còn lại: LH, HL, HH")
+        with col3:
+            st.markdown("**3. Ảnh khử nhiễu IDWT**")
+            st.image(denoised_img, channels="GRAY", use_container_width=True)
+            
+        st.markdown("---")
+        st.info(r"""
+        **Giải thích sơ đồ Filterbanks (DWT & IDWT):**
+        - **Phân rã (Forward DWT):** Tín hiệu $x(n)$ đi qua bộ lọc thông thấp (LL) và thông cao (LH, HL, HH) rồi được lấy mẫu xuống ($\downarrow 2$). Hình ở giữa minh họa rõ nét 4 ma trận kết quả này.
+        - **Khử nhiễu (Denoising):** Nhiễu Gaussian thường có tần số cao và biên độ nhỏ, do đó nó nằm lẫn trong 3 dải chi tiết (LH, HL, HH). Bằng thuật toán **Soft Thresholding** (cắt ngưỡng mềm), ta gọt sạch các nhiễu nhỏ hơn Threshold mà vẫn giữ lại được các đường nét biên (edges) lớn.
+        - **Tái tạo (Inverse DWT):** Các ma trận sau khi đã "lọc sạch" nhiễu sẽ được lấy mẫu lên ($\uparrow 2$) và đi qua bộ lọc tổng hợp để gộp lại thành bức ảnh cuối cùng mượt mà hơn rất nhiều!
+        """)
