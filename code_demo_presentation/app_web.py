@@ -423,6 +423,13 @@ if st.session_state.current_page == "3.4 Hàm Suy Biến":
         st.image(H_s_mag_vis, channels="GRAY", use_container_width=True)
 
 elif st.session_state.current_page == "3.5 Khử Nhiễu Wavelet":
+    from wavelet_forward_demo import render_wavelet_demo
+
+    render_wavelet_demo()
+    # Phần prototype cũ được giữ lại dưới dạng ghi chú để dễ đối chiếu,
+    # nhưng không được thực thi vì renderer mới đã hoàn tất trang 3.5.
+    _legacy_wavelet_code = r'''
+
     import pywt
     
     # 1. BẢNG ĐIỀU KHIỂN
@@ -522,3 +529,9 @@ elif st.session_state.current_page == "3.5 Khử Nhiễu Wavelet":
         - **Khử nhiễu (Denoising):** Nhiễu Gaussian thường có tần số cao và biên độ nhỏ, do đó nó nằm lẫn trong 3 dải chi tiết (LH, HL, HH). Bằng thuật toán **Soft Thresholding** (cắt ngưỡng mềm), ta gọt sạch các nhiễu nhỏ hơn Threshold mà vẫn giữ lại được các đường nét biên (edges) lớn.
         - **Tái tạo (Inverse DWT):** Các ma trận sau khi đã "lọc sạch" nhiễu sẽ được lấy mẫu lên ($\uparrow 2$) và đi qua bộ lọc tổng hợp để gộp lại thành bức ảnh cuối cùng mượt mà hơn rất nhiều!
         """)
+    '''
+
+elif st.session_state.current_page == "3.6 Lọc Wiener":
+    from wiener_filter_demo import render_wiener_demo
+
+    render_wiener_demo()
